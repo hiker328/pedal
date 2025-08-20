@@ -1,7 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
+  // Verifica se está em modo de build
+  if (process.env.NODE_ENV === 'production' && !isSupabaseConfigured()) {
+    return NextResponse.json({ error: "Configuração do banco de dados não disponível" }, { status: 503 })
+  }
+
   try {
     const body = await request.json()
 
@@ -15,6 +20,7 @@ export async function POST(request: NextRequest) {
           const participantsData = JSON.parse(payment.observations)
 
           // Salva os participantes no Supabase
+          const supabase = getSupabaseClient()
           const { data, error } = await supabase.from("pessoas").insert(participantsData).select()
 
           if (error) {
