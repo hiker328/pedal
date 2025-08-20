@@ -9,10 +9,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Trash2, Plus, Users, CreditCard, Smartphone } from "lucide-react"
+import { Trash2, Plus, Users, CreditCard, Smartphone, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { PixQRCode } from "@/components/pix-qr-code"
 import { ErrorDisplay } from "@/components/error-display"
 
 interface Participant {
@@ -29,13 +28,12 @@ export function RegistrationForm() {
   const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix")
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
-  const [pixData, setPixData] = useState<{
-    qrCode: string
-    copyPaste: string
-    paymentId: string
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentData, setPaymentData] = useState<{
+    orderId: string
+    deeplink: string
+    amount: number
   } | null>(null)
-  const [showPixModal, setShowPixModal] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const shirtSizes = ["PP", "P", "M", "G", "GG", "XG", "XXG"]
@@ -88,23 +86,15 @@ export function RegistrationForm() {
     return true
   }
 
-  const copyPixCode = async () => {
-    if (pixData?.copyPaste) {
-      try {
-        await navigator.clipboard.writeText(pixData.copyPaste)
-        setCopied(true)
-        toast({
-          title: "Código PIX copiado!",
-          description: "Cole no seu app do banco para fazer o pagamento.",
-        })
-        setTimeout(() => setCopied(false), 3000)
-      } catch (err) {
-        toast({
-          title: "Erro ao copiar",
-          description: "Tente copiar manualmente o código PIX.",
-          variant: "destructive",
-        })
-      }
+  const openInfinitePay = () => {
+    if (paymentData?.deeplink) {
+      // Tenta abrir o app InfinitePay
+      window.location.href = paymentData.deeplink
+      
+      toast({
+        title: "Abrindo InfinitePay...",
+        description: "Se o app não abrir automaticamente, abra o InfinitePay manualmente.",
+      })
     }
   }
 
@@ -124,7 +114,7 @@ export function RegistrationForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: totalAmount,
+          amount: totalAmount * 100, // Converte para centavos
           paymentMethod,
           participants: participants.length,
           customerName: participants[0].nome,
@@ -132,32 +122,24 @@ export function RegistrationForm() {
         }),
       })
 
-      const paymentData = await paymentResponse.json()
+      const responseData = await paymentResponse.json()
 
       if (!paymentResponse.ok) {
-        throw new Error(paymentData.error || "Erro ao criar pagamento")
+        throw new Error(responseData.error || "Erro ao criar pagamento")
       }
 
-      if (paymentMethod === "pix" && paymentData.pixQrCode) {
-        setPixData({
-          qrCode: paymentData.pixQrCode,
-          copyPaste: paymentData.pixCopyAndPaste,
-          paymentId: paymentData.paymentId,
-        })
-        setShowPixModal(true)
-      } else {
-        if (paymentData.invoiceUrl) {
-          window.open(paymentData.invoiceUrl, "_blank")
-        }
-      }
+      // Salva os dados do pagamento
+      setPaymentData({
+        orderId: responseData.orderId,
+        deeplink: responseData.deeplink,
+        amount: totalAmount,
+      })
+
+      setShowPaymentModal(true)
 
       toast({
         title: "Pagamento criado com sucesso!",
-        description: `${participants.length} pessoa(s). Total: R$ ${totalAmount.toFixed(2)}. ${
-          paymentMethod === "pix"
-            ? "Escaneie o QR Code ou copie o código PIX."
-            : "Complete o pagamento para confirmar sua inscrição."
-        }`,
+        description: `${participants.length} pessoa(s). Total: R$ ${totalAmount.toFixed(2)}. Abra o InfinitePay para finalizar o pagamento.`,
       })
 
       // Reset form após criar pagamento
@@ -365,38 +347,49 @@ export function RegistrationForm() {
               </CardContent>
             </Card>
 
-            {/* Modal do PIX */}
-            <Dialog open={showPixModal} onOpenChange={setShowPixModal}>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Modal do InfinitePay */}
+            <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+              <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle className="sr-only">Pagamento PIX</DialogTitle>
+                  <DialogTitle className="text-center text-2xl font-bold text-blue-900">
+                    Pagamento com InfinitePay
+                  </DialogTitle>
                 </DialogHeader>
 
-                {pixData && (
-                  <PixQRCode
-                    qrCode={pixData.qrCode}
-                    copyPaste={pixData.copyPaste}
-                    amount={(paymentMethod === "pix" ? 130 : 135) * participants.length}
-                    paymentId={pixData.paymentId}
-                  />
-                )}
+                <div className="text-center space-y-4">
+                  <div className="p-6 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg">
+                    <div className="text-3xl font-bold text-green-600 mb-2">
+                      R$ {paymentData?.amount.toFixed(2)}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {participants.length} participante(s)
+                    </div>
+                  </div>
 
-                <div className="flex gap-3 mt-6">
-                  <Button onClick={() => setShowPixModal(false)} variant="outline" className="flex-1">
-                    Fechar
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setShowPixModal(false)
-                      toast({
-                        title: "Aguardando pagamento...",
-                        description: "Você receberá uma confirmação assim que o pagamento for processado.",
-                      })
-                    }}
-                    className="flex-1 bg-green-500 hover:bg-green-600"
-                  >
-                    Pagamento Feito
-                  </Button>
+                  <div className="space-y-3">
+                    <p className="text-gray-700">
+                      Para finalizar sua inscrição, você será redirecionado para o app InfinitePay.
+                    </p>
+                    
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-sm text-yellow-800">
+                        <strong>Importante:</strong> Certifique-se de ter o app InfinitePay instalado no seu dispositivo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button onClick={() => setShowPaymentModal(false)} variant="outline" className="flex-1">
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={openInfinitePay}
+                      className="flex-1 bg-green-500 hover:bg-green-600"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Abrir InfinitePay
+                    </Button>
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>

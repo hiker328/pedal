@@ -19,7 +19,7 @@ export function LocationMap() {
                 <p className="text-gray-600">Av. Principal, 1500 - São Paulo, SP</p>
                 <div className="mt-4">
                   <a
-                    href="https://maps.google.com/?q=Centro+de+Convenções+São+Paulo"
+                    href="https://maps.app.goo.gl/gdgai8PgHJoVtaAV8"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors"
